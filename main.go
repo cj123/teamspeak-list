@@ -7,7 +7,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -15,6 +17,7 @@ var (
 	port     = os.Getenv("TS3_PORT")
 	username = os.Getenv("TS3_USERNAME")
 	password = os.Getenv("TS3_PASSWORD")
+	serverID = os.Getenv("TS3_SERVERID")
 )
 
 type Channel struct {
@@ -94,6 +97,17 @@ type ClientInfo struct {
 	IsChannelCommander bool `ms:"is_channel_commander"`
 }
 
+type OnlineClient struct {
+	ID          int    `ms:"clid"`
+	DatabaseID  int    `ms:"client_database_id"`
+	Nickname    string `ms:"client_nickname"`
+	Type        int    `ms:"client_type"`
+	Away        bool   `ms:"client_away"`
+	AwayMessage string `ms:"client_away_message"`
+}
+
+var data string
+
 func main() {
 	client, err := ts3.NewClient(server + ":" + port)
 
@@ -103,7 +117,9 @@ func main() {
 
 	defer client.Close()
 
-	if err := client.Use(1); err != nil {
+	u, _ := strconv.ParseInt(serverID, 0, 10)
+
+	if err := client.Use(int(u)); err != nil {
 		panic(err)
 	}
 
@@ -118,59 +134,66 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "teamspeak users online. yet another useless project by seejy\n-------------------------------------------------------------\n\n")
+		fmt.Fprintf(w, "%s", data)
+	})
 
-		clientList, err := cmds.ClientList()
+	go func() {
+		for {
+			logrus.Infof("Updating")
 
-		if err != nil {
-			logrus.Errorf("unable to get client list, err: %s", err)
-			http.Error(w, "can't get client list", http.StatusInternalServerError)
-			return
-		}
+			data = "teamspeak users online. yet another useless project by seejy\n-------------------------------------------------------------\n\n"
 
-		if len(clientList) == 0 {
-			fmt.Fprint(w, "no users online")
-			return
-		}
-
-		var channels []*Channel
-
-		if _, err := cmds.ExecCmd(ts3.NewCmd("channellist").WithResponse(&channels)); err != nil {
-			logrus.Errorf("unable to get chan list, err: %s", err)
-			http.Error(w, "can't get chan list", http.StatusInternalServerError)
-			return
-		}
-
-		clientInfo := make([]*ClientInfo, 0)
-
-		for _, c := range clientList {
-			var cl *ClientInfo
-
-			_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
-
-			if err != nil {
-				logrus.Errorf("unable to get client info, err: %s", err)
-				http.Error(w, "can't get client info", http.StatusInternalServerError)
+			var clientList []*OnlineClient
+			if _, err := cmds.ExecCmd(ts3.NewCmd("clientlist").WithResponse(&clientList)); err != nil {
+				logrus.Errorf("unable to get client list, err: %s", err)
 				return
 			}
 
-			clientInfo = append(clientInfo, cl)
-		}
+			if len(clientList) == 0 {
+				return
+			}
 
-		for _, ch := range channels {
-			fmt.Fprintf(w, "#%d - %s\n\n", ch.ID, ch.ChannelName)
+			var channels []*Channel
 
-			for _, c := range clientInfo {
-				if strings.Contains(c.Nickname, "serveradmin") {
-					continue
+			if _, err := cmds.ExecCmd(ts3.NewCmd("channellist").WithResponse(&channels)); err != nil {
+				logrus.Errorf("unable to get chan list, err: %s", err)
+				return
+			}
+
+			clientInfo := make([]*ClientInfo, 0)
+
+			for _, c := range clientList {
+				var cl *ClientInfo
+
+				_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
+
+				if err != nil {
+					logrus.Errorf("unable to get client info, err: %s", err)
+					return
 				}
 
-				if c.ChannelID == ch.ID {
-					fmt.Fprintf(w, "\t%s\n\t\tmic muted:\t%t\n\t\tspeakers muted:\t%t\n\n\n", c.Nickname, c.InputMuted, c.OutputMuted)
+				clientInfo = append(clientInfo, cl)
+			}
+
+			for _, ch := range channels {
+				data += fmt.Sprintf("#%d - %s\n\n", ch.ID, ch.ChannelName)
+
+				for _, c := range clientInfo {
+					if strings.Contains(c.Nickname, "serveradmin") {
+						continue
+					}
+
+					if c.ChannelID == ch.ID {
+						data += fmt.Sprintf("\t%s\n\t\tmic muted:\t%t\n\t\tspeakers muted:\t%t\n\n\n", c.Nickname, c.InputMuted, c.OutputMuted)
+					}
 				}
 			}
+
+			data += fmt.Sprintf("\n\n\nlast updated: %s\n\n", time.Now().String())
+
+			time.Sleep(5 * time.Second)
 		}
-	})
+	}()
 
 	http.ListenAndServe("0.0.0.0:2208", r)
 }
