@@ -109,28 +109,6 @@ type OnlineClient struct {
 var data string
 
 func main() {
-	client, err := ts3.NewClient(server + ":" + port)
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer client.Close()
-
-	u, _ := strconv.ParseInt(serverID, 0, 10)
-
-	if err := client.Use(int(u)); err != nil {
-		panic(err)
-	}
-
-	err = client.Login(username, password)
-
-	if err != nil {
-		panic(err)
-	}
-
-	cmds := ts3.ServerMethods{Client: client}
-
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -139,61 +117,100 @@ func main() {
 
 	go func() {
 		for {
-			logrus.Infof("Updating")
+			newData, err := update()
 
-			data = "teamspeak users online. yet another useless project by seejy\n-------------------------------------------------------------\n\n"
-
-			var clientList []*OnlineClient
-			if _, err := cmds.ExecCmd(ts3.NewCmd("clientlist").WithResponse(&clientList)); err != nil {
-				logrus.Errorf("unable to get client list, err: %s", err)
-				return
+			if err != nil {
+				logrus.Errorf("Unable to update, err: %s", err.Error())
 			}
 
-			if len(clientList) == 0 {
-				return
-			}
-
-			var channels []*Channel
-
-			if _, err := cmds.ExecCmd(ts3.NewCmd("channellist").WithResponse(&channels)); err != nil {
-				logrus.Errorf("unable to get chan list, err: %s", err)
-				return
-			}
-
-			clientInfo := make([]*ClientInfo, 0)
-
-			for _, c := range clientList {
-				var cl *ClientInfo
-
-				_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
-
-				if err != nil {
-					logrus.Errorf("unable to get client info, err: %s", err)
-					return
-				}
-
-				clientInfo = append(clientInfo, cl)
-			}
-
-			for _, ch := range channels {
-				data += fmt.Sprintf("#%d - %s\n\n", ch.ID, ch.ChannelName)
-
-				for _, c := range clientInfo {
-					if strings.Contains(c.Nickname, "serveradmin") {
-						continue
-					}
-
-					if c.ChannelID == ch.ID {
-						data += fmt.Sprintf("\t%s\n\t\tmic muted:\t%t\n\t\tspeakers muted:\t%t\n\n\n", c.Nickname, c.InputMuted, c.OutputMuted)
-					}
-				}
-			}
-
-			data += fmt.Sprintf("\n\n\nlast updated: %s\n\n", time.Now().String())
+			data = newData
 
 			time.Sleep(5 * time.Second)
 		}
 	}()
 
 	http.ListenAndServe("0.0.0.0:2208", r)
+}
+
+func update() (string, error) {
+	client, err := ts3.NewClient(server + ":" + port)
+
+	if err != nil {
+		return "", err
+	}
+
+	defer client.Close()
+
+	u, _ := strconv.ParseInt(serverID, 0, 10)
+
+	time.Sleep(1 * time.Second)
+
+	if err := client.Use(int(u)); err != nil {
+		return "", err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	err = client.Login(username, password)
+
+	if err != nil {
+		return "", err
+	}
+
+	cmds := ts3.ServerMethods{Client: client}
+
+	newData := "teamspeak users online. yet another useless project by seejy\n-------------------------------------------------------------\n\n"
+
+	var clientList []*OnlineClient
+	if _, err := cmds.ExecCmd(ts3.NewCmd("clientlist").WithResponse(&clientList)); err != nil {
+		return "", err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	if len(clientList) == 0 {
+		return "", err
+	}
+
+	var channels []*Channel
+
+	if _, err := cmds.ExecCmd(ts3.NewCmd("channellist").WithResponse(&channels)); err != nil {
+		return "", err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	clientInfo := make([]*ClientInfo, 0)
+
+	for _, c := range clientList {
+		var cl *ClientInfo
+
+		_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
+
+		if err != nil {
+			return "", err
+		}
+
+		time.Sleep(1 * time.Second)
+
+		clientInfo = append(clientInfo, cl)
+	}
+
+	for _, ch := range channels {
+		newData += fmt.Sprintf("#%d - %s\n\n", ch.ID, ch.ChannelName)
+
+		for _, c := range clientInfo {
+			if strings.Contains(c.Nickname, "serveradmin") {
+				continue
+			}
+
+			if c.ChannelID == ch.ID {
+				newData += fmt.Sprintf("\t%s\n\t\tmic muted:\t%t\n\t\tspeakers muted:\t%t\n\n\n", c.Nickname, c.InputMuted, c.OutputMuted)
+			}
+		}
+	}
+
+	newData += fmt.Sprintf("\n\n\nlast updated: %s\n\n", time.Now().String())
+
+	return newData, nil
 }
