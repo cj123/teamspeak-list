@@ -1,15 +1,17 @@
 package main
 
 import (
-	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/multiplay/go-ts3"
-	"github.com/sirupsen/logrus"
+	"html/template"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dustin/go-humanize"
+	"github.com/gorilla/mux"
+	"github.com/multiplay/go-ts3"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -106,24 +108,49 @@ type OnlineClient struct {
 	AwayMessage string `ms:"client_away_message"`
 }
 
-var data string
-
 func main() {
 	r := mux.NewRouter()
+	updated := time.Now()
+
+	var channels []*Channel
+	var users []*ClientInfo
+
+	t, err := template.New("users").Funcs(map[string]interface{}{"yes": func(b bool) string {
+		if b {
+			return "yes"
+		} else {
+			return "no"
+		}
+	}, "bytes": func(i int) string { return humanize.Bytes(uint64(i)) }}).Parse(htmlTemplate)
+
+	if err != nil {
+		panic(err)
+	}
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "%s", data)
+		err := t.Execute(w, map[string]interface{}{
+			"channels": channels,
+			"users":    users,
+			"updated":  updated.Format(time.RFC1123),
+		})
+
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	go func() {
 		for {
-			newData, err := update()
+			updatedChannels, updatedUsers, err := update()
 
 			if err != nil {
 				logrus.Errorf("Unable to update, err: %s", err.Error())
+				continue
 			}
 
-			data = newData
+			channels = updatedChannels
+			users = updatedUsers
+			updated = time.Now()
 
 			time.Sleep(5 * time.Second)
 		}
@@ -132,11 +159,11 @@ func main() {
 	http.ListenAndServe("0.0.0.0:2208", r)
 }
 
-func update() (string, error) {
+func update() ([]*Channel, []*ClientInfo, error) {
 	client, err := ts3.NewClient(server + ":" + port)
 
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	defer client.Close()
@@ -146,7 +173,7 @@ func update() (string, error) {
 	time.Sleep(1 * time.Second)
 
 	if err := client.Use(int(u)); err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	time.Sleep(1 * time.Second)
@@ -154,28 +181,26 @@ func update() (string, error) {
 	err = client.Login(username, password)
 
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	cmds := ts3.ServerMethods{Client: client}
 
-	newData := "teamspeak users online. yet another useless project by seejy\n-------------------------------------------------------------\n\n"
-
 	var clientList []*OnlineClient
 	if _, err := cmds.ExecCmd(ts3.NewCmd("clientlist").WithResponse(&clientList)); err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	time.Sleep(1 * time.Second)
 
 	if len(clientList) == 0 {
-		return "", err
+		return nil, nil, err
 	}
 
 	var channels []*Channel
 
 	if _, err := cmds.ExecCmd(ts3.NewCmd("channellist").WithResponse(&channels)); err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	time.Sleep(1 * time.Second)
@@ -185,10 +210,14 @@ func update() (string, error) {
 	for _, c := range clientList {
 		var cl *ClientInfo
 
+		if strings.Contains(c.Nickname, "serveradmin") {
+			continue
+		}
+
 		_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
 
 		if err != nil {
-			return "", err
+			return nil, nil, err
 		}
 
 		time.Sleep(1 * time.Second)
@@ -196,21 +225,92 @@ func update() (string, error) {
 		clientInfo = append(clientInfo, cl)
 	}
 
-	for _, ch := range channels {
-		newData += fmt.Sprintf("#%d - %s\n\n", ch.ID, ch.ChannelName)
-
-		for _, c := range clientInfo {
-			if strings.Contains(c.Nickname, "serveradmin") {
-				continue
-			}
-
-			if c.ChannelID == ch.ID {
-				newData += fmt.Sprintf("\t%s\n\t\tmic muted:\t%t\n\t\tspeakers muted:\t%t\n\n\n", c.Nickname, c.InputMuted, c.OutputMuted)
-			}
-		}
-	}
-
-	newData += fmt.Sprintf("\n\n\nlast updated: %s\n\n", time.Now().String())
-
-	return newData, nil
+	return channels, clientInfo, nil
 }
+
+const htmlTemplate = `
+<!doctype html>
+<html lang="en">
+
+<head>
+	<title>Teamspeak List</title>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.3/css/bootstrap.min.css" />
+	<link href="data:image/x-icon;base64,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" rel="icon" type="image/x-icon">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style type="text/css">
+		div.channel {
+			margin-top: 20px;
+			margin-bottom: 20px;
+		}
+
+		footer {
+			margin-top: 40px;
+		}
+	</style>
+</head>
+
+<body>
+	<nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
+		<div class="container">
+			<a class="navbar-brand" href="#">Teamspeak List</a>
+		</div>
+	</nav>
+
+	<div class="container">
+		{{ $users := .users }}
+
+		{{ range $i, $channel := .channels }}
+			<div class="channel table-responsive">
+				<h3><small>#{{ $channel.ID }}</small> - {{ $channel.ChannelName }}</h3>
+
+					{{ $hasUsers := false }}
+
+					{{ range $j, $user := $users }}
+						{{ if eq $user.ChannelID $channel.ID }}
+							{{ $hasUsers = true }}
+						{{ end }}
+					{{ end }}
+
+
+					{{ if $hasUsers }}
+					<table style="width: 100%;" class="table table-striped table-bordered">
+						<tr>
+							<th>Nickname</th>
+							<th>OS</th>
+							<th class="text-center">Microphone Muted?</th>
+							<th class="text-center">Speakers Muted?</th>
+							<th class="text-center">Bandwidth Wasted</th>
+						</tr>
+					{{ range $j, $user := $users }}
+						{{ if eq $user.ChannelID $channel.ID }}
+							<tr>
+								<td>{{ $user.Nickname }}{{ with $user.PhoneticNickname }}<br><small><em>noun</em>: /{{ $user.PhoneticNickname }}/</small>{{ end }}</td>
+								<td>{{ $user.Platform }}</td>
+								<td class="text-center">{{ yes $user.InputMuted }}</td>
+								<td class="text-center">{{ yes $user.OutputMuted }}</td>
+								<td class="text-center">{{ bytes $user.TotalBytesDownloaded }} down / {{ bytes $user.TotalBytesUploaded }} up</td>
+							</tr>
+						{{ end }}
+					</table>
+					{{ else }}
+						<p>nobody likes this channel</p>
+					{{ end }}
+				{{ end }}
+			</div>
+		{{ else }}
+			<br><br>
+			<p>eep! no data yet...</p>
+		{{ end }}
+	</div>
+
+	<footer class="text-muted">
+		<div class="container">
+			<b>updated {{ .updated }}</b><br><br>
+
+			<em>A slightly less useless project by seejy</em>
+		</div>
+	</footer>
+</body>
+
+</html>
+`
