@@ -291,7 +291,6 @@ const htmlTemplate = `
 								<td class="text-center">{{ bytes $user.TotalBytesDownloaded }} down / {{ bytes $user.TotalBytesUploaded }} up</td>
 							</tr>
 						{{ end }}
-					</table>
 					{{ else }}
 						<p>nobody likes this channel</p>
 					{{ end }}
