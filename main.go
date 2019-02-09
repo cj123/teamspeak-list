@@ -295,6 +295,7 @@ const htmlTemplate = `
 						<p>nobody likes this channel</p>
 					{{ end }}
 				{{ end }}
+				</table>
 			</div>
 		{{ else }}
 			<br><br>
