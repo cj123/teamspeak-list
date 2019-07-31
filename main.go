@@ -210,7 +210,7 @@ func update() ([]*Channel, []*ClientInfo, error) {
 	for _, c := range clientList {
 		var cl *ClientInfo
 
-		if strings.Contains(c.Nickname, "serveradmin") {
+		if strings.Contains(c.Platform, "ServerQuery") {
 			continue
 		}
 
