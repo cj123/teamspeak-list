@@ -210,10 +210,6 @@ func update() ([]*Channel, []*ClientInfo, error) {
 	for _, c := range clientList {
 		var cl *ClientInfo
 
-		if strings.Contains(c.Platform, "ServerQuery") {
-			continue
-		}
-
 		_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
 
 		if err != nil {
@@ -221,6 +217,10 @@ func update() ([]*Channel, []*ClientInfo, error) {
 		}
 
 		time.Sleep(1 * time.Second)
+
+		if strings.Contains(cl.Platform, "ServerQuery") {
+			continue
+		}
 
 		clientInfo = append(clientInfo, cl)
 	}
