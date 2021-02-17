@@ -62,7 +62,7 @@ type ClientInfo struct {
 	// ChannelGroupId is the ID of the channel group the client is in.
 	ChannelGroupId int `ms:"client_channel_group_id"`
 	// ServerGroups is the list of server groups on the client.
-	ServerGroups []int `ms:"client_servergroups"`
+	// ServerGroups []int `ms:"client_servergroups"`
 	// TotalConnections is the total number of times the client has connected.
 	TotalConnections int `ms:"client_totalconnections"`
 	// Away is set if the client is marked as away.
@@ -252,7 +252,7 @@ const htmlTemplate = `
 <body>
 	<nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
 		<div class="container">
-			<a class="navbar-brand" href="#">Teamspeak List</a>
+			<a class="navbar-brand" href="/">Teamspeak List</a>
 		</div>
 	</nav>
 
