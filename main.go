@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -225,6 +226,10 @@ func update() ([]*Channel, []*ClientInfo, error) {
 		clientInfo = append(clientInfo, cl)
 	}
 
+	sort.Slice(clientInfo, func(i, j int) bool {
+		return clientInfo[i].Nickname < clientInfo[j].Nickname
+	})
+
 	return channels, clientInfo, nil
 }
 
@@ -250,7 +255,7 @@ const htmlTemplate = `
 </head>
 
 <body>
-	<nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
+	<nav class="navbar sticky-top navbar-expand-lg navbar-dark" style="background-color: #0d619e !important">
 		<div class="container">
 			<a class="navbar-brand" href="/">Teamspeak List</a>
 		</div>
