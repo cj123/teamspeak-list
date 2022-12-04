@@ -170,25 +170,24 @@ func update() ([]*Channel, []*ClientInfo, error) {
 		return nil, nil, err
 	}
 
-	defer client.Close()
+	cmds := &ts3.ServerMethods{Client: client}
+	defer cmds.Close()
 
 	u, _ := strconv.ParseInt(serverID, 0, 10)
 
 	time.Sleep(1 * time.Second)
 
-	if err := client.Use(int(u)); err != nil {
+	if err := cmds.Use(int(u)); err != nil {
 		return nil, nil, err
 	}
 
 	time.Sleep(1 * time.Second)
 
-	err = client.Login(username, password)
+	err = cmds.Login(username, password)
 
 	if err != nil {
 		return nil, nil, err
 	}
-
-	cmds := ts3.ServerMethods{Client: client}
 
 	var clientList []*OnlineClient
 	if _, err := cmds.ExecCmd(ts3.NewCmd("clientlist").WithResponse(&clientList)); err != nil {
@@ -214,7 +213,7 @@ func update() ([]*Channel, []*ClientInfo, error) {
 	for _, c := range clientList {
 		var cl *ClientInfo
 
-		_, err := client.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
+		_, err := cmds.ExecCmd(ts3.NewCmd("clientinfo").WithArgs(ts3.NewArg("clid", c.ID)).WithResponse(&cl))
 
 		if err != nil {
 			return nil, nil, err

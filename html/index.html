@@ -41,29 +41,29 @@
 
 
             {{ if $hasUsers }}
-            <table style="width: 100%;" class="table table-striped table-bordered">
-                <tr>
-                    <th>Nickname</th>
-                    <th>OS</th>
-                    <th class="text-center">Microphone Muted?</th>
-                    <th class="text-center">Speakers Muted?</th>
-                    <th class="text-center">Bandwidth Wasted</th>
-                </tr>
-                {{ range $j, $user := $users }}
-                    {{ if eq $user.ChannelID $channel.ID }}
-                        <tr>
-                            <td>{{ $user.Nickname }}{{ with $user.PhoneticNickname }}<br><small><em>noun</em>: /{{ $user.PhoneticNickname }}/</small>{{ end }}</td>
-                            <td>{{ $user.Platform }}</td>
-                            <td class="text-center">{{ yes $user.InputMuted }}</td>
-                            <td class="text-center">{{ yes $user.OutputMuted }}</td>
-                            <td class="text-center">{{ bytes $user.TotalBytesDownloaded }} down / {{ bytes $user.TotalBytesUploaded }} up</td>
-                        </tr>
+                <table style="width: 100%;" class="table table-striped table-bordered">
+                    <tr>
+                        <th>Nickname</th>
+                        <th>OS</th>
+                        <th class="text-center">Microphone Muted?</th>
+                        <th class="text-center">Speakers Muted?</th>
+                        <th class="text-center">Bandwidth Wasted</th>
+                    </tr>
+                    {{ range $j, $user := $users }}
+                        {{ if eq $user.ChannelID $channel.ID }}
+                            <tr>
+                                <td>{{ $user.Nickname }}{{ with $user.PhoneticNickname }}<br><small><em>noun</em>: /{{ $user.PhoneticNickname }}/</small>{{ end }}</td>
+                                <td>{{ $user.Platform }}</td>
+                                <td class="text-center">{{ yes $user.InputMuted }}</td>
+                                <td class="text-center">{{ yes $user.OutputMuted }}</td>
+                                <td class="text-center">{{ bytes $user.TotalBytesDownloaded }} down / {{ bytes $user.TotalBytesUploaded }} up</td>
+                            </tr>
+                        {{ end }}
+                    {{ else }}
+                        <p>nobody likes this channel</p>
                     {{ end }}
-                {{ else }}
-                    <p>nobody likes this channel</p>
-                {{ end }}
-                {{ end }}
-            </table>
+                </table>
+            {{ end }}
         </div>
     {{ else }}
         <br><br>
